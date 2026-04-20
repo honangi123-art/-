@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>스톤에이지 페트 계산기</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/decimal.js/10.4.3/decimal.min.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="logo">환각 계산기</div>
+      <div class="logo-sub">공개 구글 시트 자동 연동 버전</div>
+
+      <div class="menu-group">
+        <div class="menu-title">계산</div>
+        <button class="menu-item active" type="button">환각 계산</button>
+        <button class="menu-item" type="button">성장률 계산</button>
+        <button class="menu-item" type="button">스탯 역산</button>
+      </div>
+
+      <div class="menu-group">
+        <div class="menu-title">상태</div>
+        <div class="logo-sub" id="load-status">공개 시트에서 페트를 자동으로 불러오는 중...</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="hero">
+        <div class="eyebrow">PUBLIC GOOGLE SHEET AUTO LOAD</div>
+        <h1>스톤에이지 페트 계산기</h1>
+        <p>URL만 열면 누구나 공개 시트의 페트를 자동으로 불러와서 사용할 수 있도록 만든 버전입니다.</p>
+      </section>
+
+      <section class="content-grid">
+        <div>
+          <div class="card">
+            <h2>검색</h2>
+            <div class="hint">초성 검색을 지원합니다. 등록된 페트 이름을 검색하거나 최근 검색에서 바로 선택하세요.</div>
+
+            <div class="search-row">
+              <div>
+                <label for="pet-search">페트 검색</label>
+                <input id="pet-search" type="text" placeholder="페트 이름 또는 초성 입력" autocomplete="off" />
+              </div>
+              <button class="btn primary" id="fill-ideal-btn" type="button">이상치 입력</button>
+            </div>
+
+            <div id="suggestions" class="suggestions"></div>
+
+            <div class="section-gap">
+              <div class="hint" style="margin-bottom:6px;">최근 검색 목록</div>
+              <div id="recent-list" class="recent-list"></div>
+            </div>
+          </div>
+
+          <div class="card section-gap">
+            <h2>⚡ 스탯 입력</h2>
+            <div class="hint">공격력 / 방어력 / 순발력 / 체력을 기준으로 계산합니다.</div>
+
+            <label>공격력</label>
+            <div class="stat-row">
+              <button class="mini-btn" type="button" data-target="display-attack" data-delta="-1">−</button>
+              <input id="display-attack" type="number" value="0" />
+              <button class="mini-btn" type="button" data-target="display-attack" data-delta="1">+</button>
+            </div>
+
+            <label>방어력</label>
+            <div class="stat-row">
+              <button class="mini-btn" type="button" data-target="display-defense" data-delta="-1">−</button>
+              <input id="display-defense" type="number" value="0" />
+              <button class="mini-btn" type="button" data-target="display-defense" data-delta="1">+</button>
+            </div>
+
+            <label>순발력</label>
+            <div class="stat-row">
+              <button class="mini-btn" type="button" data-target="display-agility" data-delta="-1">−</button>
+              <input id="display-agility" type="number" value="0" />
+              <button class="mini-btn" type="button" data-target="display-agility" data-delta="1">+</button>
+            </div>
+
+            <label>체력</label>
+            <div class="stat-row">
+              <button class="mini-btn" type="button" data-target="display-health" data-delta="-1">−</button>
+              <input id="display-health" type="number" value="0" />
+              <button class="mini-btn" type="button" data-target="display-health" data-delta="1">+</button>
+            </div>
+
+            <button class="btn primary section-gap" id="calculate-btn" type="button" style="width:100%;">계산하기</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <h2>결과</h2>
+            <div class="hint">선택한 페트와 현재 입력된 스탯을 기준으로 계산합니다.</div>
+
+            <div class="kpi-grid">
+              <div class="kpi"><div class="kpi-label">성공 확률</div><div class="kpi-value" id="kpi-success">—</div></div>
+              <div class="kpi"><div class="kpi-label">출현 확률</div><div class="kpi-value" id="kpi-appear">—</div></div>
+              <div class="kpi"><div class="kpi-label">성공 기대값</div><div class="kpi-value" id="kpi-attempts">—</div></div>
+            </div>
+
+            <div class="result-box" id="result-box">스탯을 조절하고 계산하기를 눌러주세요.</div>
+          </div>
+
+          <div class="card section-gap">
+            <h2>등급 분포</h2>
+            <div class="hint">입력 스탯과 이상치의 차이를 보조 지표로 보여줍니다.</div>
+            <div class="dist-grid">
+              <div class="dist-card"><div class="dist-name">공격 편차</div><div class="dist-value" id="dist-attack">—</div></div>
+              <div class="dist-card"><div class="dist-name">방어 편차</div><div class="dist-value" id="dist-defense">—</div></div>
+              <div class="dist-card"><div class="dist-name">순발 편차</div><div class="dist-value" id="dist-agility">—</div></div>
+              <div class="dist-card"><div class="dist-name">체력 편차</div><div class="dist-value" id="dist-health">—</div></div>
+            </div>
+          </div>
+
+          <div class="card section-gap">
+            <h2>등록된 페트</h2>
+            <div class="hint">공개 구글 시트의 페트 목록이 자동으로 로드됩니다.</div>
+            <div id="pet-list"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    window.PUBLIC_SHEET_CONFIG = {
+      sheetId: "1m-jpH-n7H8GyvES4pgZgjpXZNgzr_VY9Z5H1sDPNcgI",
+      gid: "0"
+    };
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>
