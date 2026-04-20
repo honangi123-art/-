@@ -11,7 +11,7 @@
   <div class="layout">
     <aside class="sidebar">
       <div class="logo">환각 계산기</div>
-      <div class="logo-sub">공개 구글 시트 자동 연동 버전</div>
+      <div class="logo-sub">CSV 공개 시트 자동 연동 버전</div>
 
       <div class="menu-group">
         <div class="menu-title">계산</div>
@@ -22,15 +22,15 @@
 
       <div class="menu-group">
         <div class="menu-title">상태</div>
-        <div class="logo-sub" id="load-status">공개 시트에서 페트를 자동으로 불러오는 중...</div>
+        <div class="logo-sub" id="load-status">CSV 공개 시트에서 자동으로 불러오는 중...</div>
       </div>
     </aside>
 
     <main class="main">
       <section class="hero">
-        <div class="eyebrow">PUBLIC GOOGLE SHEET AUTO LOAD</div>
+        <div class="eyebrow">PUBLIC CSV AUTO LOAD</div>
         <h1>스톤에이지 페트 계산기</h1>
-        <p>URL만 열면 누구나 공개 시트의 페트를 자동으로 불러와서 사용할 수 있도록 만든 버전입니다.</p>
+        <p>공개된 구글 시트 CSV를 자동으로 읽어와 누구나 바로 사용할 수 있는 버전입니다.</p>
       </section>
 
       <section class="content-grid">
@@ -118,7 +118,7 @@
 
           <div class="card section-gap">
             <h2>등록된 페트</h2>
-            <div class="hint">공개 구글 시트의 페트 목록이 자동으로 로드됩니다.</div>
+            <div class="hint">공개 시트 CSV의 페트 목록이 자동으로 로드됩니다.</div>
             <div id="pet-list"></div>
           </div>
         </div>
@@ -127,10 +127,7 @@
   </div>
 
   <script>
-    window.PUBLIC_SHEET_CONFIG = {
-      sheetId: "1m-jpH-n7H8GyvES4pgZgjpXZNgzr_VY9Z5H1sDPNcgI",
-      gid: "0"
-    };
+    window.PUBLIC_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRp1rn6cDg85IKVMs9UozjIv-DX5FRDnADpl9qCrT5z9oC_yo6Fq-3oTTUmw5rkq9vobMOGSvwCFMpZ/pub?gid=0&single=true&output=csv';
   </script>
   <script src="app.js"></script>
 </body>

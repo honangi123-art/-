@@ -156,6 +156,76 @@ function fillIdealStats() {
   updateDeviationCards(ideal, ideal);
 }
 
+function parseCsvLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const next = line[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function parseCsv(text) {
+  const lines = text.replace(/\r/g, '').split('\n').filter(Boolean);
+  if (!lines.length) return [];
+  const header = parseCsvLine(lines[0]).map(v => v.trim());
+  const rows = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCsvLine(lines[i]);
+    const row = {};
+    header.forEach((key, idx) => {
+      row[key] = (cols[idx] || '').trim();
+    });
+    rows.push(row);
+  }
+  return rows;
+}
+
+async function fetchPublicCsvPets() {
+  statusText('공개 CSV 시트에서 페트를 자동으로 불러오는 중...');
+  const res = await fetch(window.PUBLIC_CSV_URL, { cache: 'no-store' });
+  if (!res.ok) throw new Error('CSV fetch failed: ' + res.status);
+  const text = await res.text();
+  const rows = parseCsv(text);
+
+  const nextShared = {};
+  rows.forEach(row => {
+    const name = String(row.name || '').trim();
+    if (!name) return;
+    nextShared[name] = {
+      initialCoefficient: Number(row.initialCoefficient) || 0,
+      attackCoefficient: Number(row.attackCoefficient) || 0,
+      defenseCoefficient: Number(row.defenseCoefficient) || 0,
+      agilityCoefficient: Number(row.agilityCoefficient) || 0,
+      healthCoefficient: Number(row.healthCoefficient) || 0
+    };
+  });
+
+  petData = { ...defaultPetData, ...nextShared };
+  renderPetList();
+  renderSuggestions([]);
+  statusText(`공개 CSV 페트 ${Object.keys(nextShared).length}종 자동 로드 완료`);
+}
+
 function formatPercentage(num) {
   if (num === 0) return '0.0%';
   let str = num.toFixed(20);
@@ -167,119 +237,13 @@ function formatPercentage(num) {
   return str.slice(0, firstNonZero + 1) + '%';
 }
 
-function jsonpRequest(url) {
-  return new Promise((resolve, reject) => {
-    const callbackName = 'gvizCallback_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
-    const script = document.createElement('script');
-
-    const cleanup = () => {
-      try { delete window[callbackName]; } catch (_) {}
-      if (script.parentNode) script.parentNode.removeChild(script);
-    };
-
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error('공개 시트 JSONP timeout'));
-    }, 10000);
-
-    window[callbackName] = (data) => {
-      clearTimeout(timer);
-      cleanup();
-      resolve(data);
-    };
-
-    script.onerror = () => {
-      clearTimeout(timer);
-      cleanup();
-      reject(new Error('공개 시트 JSONP load failed'));
-    };
-
-    script.src = url;
-    document.body.appendChild(script);
-  });
-}
-
-function gvizCellValue(cell) {
-  if (!cell) return '';
-  if (cell.v !== null && cell.v !== undefined) return cell.v;
-  if (cell.f !== null && cell.f !== undefined) return cell.f;
-  return '';
-}
-
-async function fetchPublicSheetPets() {
-  const { sheetId, gid } = window.PUBLIC_SHEET_CONFIG;
-  const gvizUrl =
-    `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?gid=${gid}&headers=1&tqx=responseHandler:GVIZ_TEMP_CALLBACK;out:json`;
-
-  statusText('공개 구글 시트에서 페트를 자동으로 불러오는 중...');
-
-  // responseHandler 이름을 매번 새로 바꾸기 위해 placeholder 치환
-  const uniqueName = 'GVIZ_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
-  const finalUrl = gvizUrl.replace('GVIZ_TEMP_CALLBACK', uniqueName);
-
-  const data = await jsonpRequestWithName(finalUrl, uniqueName);
-
-  const rows = (((data || {}).table || {}).rows || []);
-  const nextShared = {};
-
-  rows.forEach((row) => {
-    const cells = row.c || [];
-    const name = String(gvizCellValue(cells[0]) || '').trim();
-    if (!name) return;
-
-    nextShared[name] = {
-      initialCoefficient: Number(gvizCellValue(cells[1])) || 0,
-      attackCoefficient: Number(gvizCellValue(cells[2])) || 0,
-      defenseCoefficient: Number(gvizCellValue(cells[3])) || 0,
-      agilityCoefficient: Number(gvizCellValue(cells[4])) || 0,
-      healthCoefficient: Number(gvizCellValue(cells[5])) || 0
-    };
-  });
-
-  petData = { ...defaultPetData, ...nextShared };
-  renderPetList();
-  renderSuggestions([]);
-  statusText(`공개 시트 페트 ${Object.keys(nextShared).length}종 자동 로드 완료`);
-}
-
-function jsonpRequestWithName(url, callbackName) {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-
-    const cleanup = () => {
-      try { delete window[callbackName]; } catch (_) {}
-      if (script.parentNode) script.parentNode.removeChild(script);
-    };
-
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error('공개 시트 JSONP timeout'));
-    }, 10000);
-
-    window[callbackName] = (data) => {
-      clearTimeout(timer);
-      cleanup();
-      resolve(data);
-    };
-
-    script.onerror = () => {
-      clearTimeout(timer);
-      cleanup();
-      reject(new Error('공개 시트 JSONP load failed'));
-    };
-
-    script.src = url + '&_=' + Date.now();
-    document.body.appendChild(script);
-  });
-}
-
 function initPage() {
   renderRecentSearches();
   renderPetList();
-  statusText('기본 페트 로드 완료 · 공개 시트 자동 로딩 시작');
-  fetchPublicSheetPets().catch((err) => {
+  statusText('기본 페트 로드 완료 · 공개 CSV 자동 로딩 시작');
+  fetchPublicCsvPets().catch((err) => {
     console.error(err);
-    statusText('공개 시트 자동 로딩 실패 · 기본 페트만 표시 중');
+    statusText('공개 CSV 자동 로딩 실패 · 기본 페트만 표시 중');
   });
 }
 
