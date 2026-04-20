@@ -11,26 +11,19 @@
   <div class="layout">
     <aside class="sidebar">
       <div class="logo">환각 계산기</div>
-      <div class="logo-sub">CSV 공개 시트 자동 연동 버전</div>
-
-      <div class="menu-group">
-        <div class="menu-title">계산</div>
-        <button class="menu-item active" type="button">환각 계산</button>
-        <button class="menu-item" type="button">성장률 계산</button>
-        <button class="menu-item" type="button">스탯 역산</button>
-      </div>
+      <div class="logo-sub">공유 추가 지원 버전</div>
 
       <div class="menu-group">
         <div class="menu-title">상태</div>
-        <div class="logo-sub" id="load-status">CSV 공개 시트에서 자동으로 불러오는 중...</div>
+        <div class="logo-sub" id="load-status">공개 CSV 시트에서 자동으로 불러오는 중...</div>
       </div>
     </aside>
 
     <main class="main">
       <section class="hero">
-        <div class="eyebrow">PUBLIC CSV AUTO LOAD</div>
+        <div class="eyebrow">PUBLIC CSV + APPS SCRIPT ADD</div>
         <h1>스톤에이지 페트 계산기</h1>
-        <p>공개된 구글 시트 CSV를 자동으로 읽어와 누구나 바로 사용할 수 있는 버전입니다.</p>
+        <p>공개 CSV로 자동 로드하고, 사이트에서 직접 페트를 추가하면 Apps Script를 통해 시트에 저장됩니다.</p>
       </section>
 
       <section class="content-grid">
@@ -89,6 +82,33 @@
 
             <button class="btn primary section-gap" id="calculate-btn" type="button" style="width:100%;">계산하기</button>
           </div>
+
+          <div class="card section-gap">
+            <h2>페트 추가</h2>
+            <div class="hint">소수점 초기치 + 성장률로 입력하면 자동으로 계수로 변환해서 공유 시트에 저장합니다.</div>
+
+            <label for="add-name">페트 이름</label>
+            <input id="add-name" type="text" placeholder="예: 모가로스" />
+
+            <label>소수점 초기치</label>
+            <div class="row-2">
+              <input id="add-atk" type="number" step="any" placeholder="공격 예: 13.00" />
+              <input id="add-def" type="number" step="any" placeholder="방어 예: 8.87" />
+              <input id="add-agi" type="number" step="any" placeholder="순발 예: 7.96" />
+              <input id="add-hp" type="number" step="any" placeholder="체력 예: 55.48" />
+            </div>
+
+            <label>성장률</label>
+            <div class="row-2">
+              <input id="grow-atk" type="number" step="any" placeholder="공성장 예: 2.288" />
+              <input id="grow-def" type="number" step="any" placeholder="방성장 예: 1.562" />
+              <input id="grow-agi" type="number" step="any" placeholder="순성장 예: 1.401" />
+              <input id="grow-hp" type="number" step="any" placeholder="체성장 예: 9.761" />
+            </div>
+
+            <button class="btn primary section-gap" id="add-pet-btn" type="button" style="width:100%;">공유 페트 추가</button>
+            <div class="hint" id="add-status" style="margin-top:10px;">아직 추가 전입니다.</div>
+          </div>
         </div>
 
         <div>
@@ -118,7 +138,7 @@
 
           <div class="card section-gap">
             <h2>등록된 페트</h2>
-            <div class="hint">공개 시트 CSV의 페트 목록이 자동으로 로드됩니다.</div>
+            <div class="hint">공개 CSV 시트의 페트 목록이 자동으로 로드됩니다.</div>
             <div id="pet-list"></div>
           </div>
         </div>
@@ -127,7 +147,8 @@
   </div>
 
   <script>
-    window.PUBLIC_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRp1rn6cDg85IKVMs9UozjIv-DX5FRDnADpl9qCrT5z9oC_yo6Fq-3oTTUmw5rkq9vobMOGSvwCFMpZ/pub?gid=0&single=true&output=csv';
+    window.PUBLIC_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRp1rn6cDg85IKVMs9UozjIv-DX5FRDnADpl9qCrT5z9oC_yo6Fq-3oTTUmw5rkq9vobMOGSvwCFMpZ/pub?gid=0&single=true&output=csv";
+    window.APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxKz79ur25uHN5zIrcx5QVjhkuIl6szQa1Qb6b3ZqfN_qsjRkAQBKHP6xM_fx-EBYvh/exec";
   </script>
   <script src="app.js"></script>
 </body>
