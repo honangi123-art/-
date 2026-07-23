@@ -393,37 +393,113 @@ function addPetFromFinalStats(name, finalHealth, finalAttack, finalDefense, fina
   return result;
 }
 
+function buildInitialStatsFromCoefficients(healthCoefficient, attackCoefficient, defenseCoefficient, agilityCoefficient, initialCoefficient) {
+  const ratio = new Decimal(initialCoefficient).dividedBy(100);
+  const health = new Decimal(healthCoefficient).plus(2.5).times(ratio);
+  const attack = new Decimal(attackCoefficient).plus(2.5).times(ratio);
+  const defense = new Decimal(defenseCoefficient).plus(2.5).times(ratio);
+  const agility = new Decimal(agilityCoefficient).plus(2.5).times(ratio);
+
+  return {
+    health: health.times(4).plus(attack).plus(defense).plus(agility),
+    attack: health.times(0.1).plus(attack).plus(defense.times(0.1)).plus(agility.times(0.05)),
+    defense: health.times(0.1).plus(attack.times(0.1)).plus(defense).plus(agility.times(0.05)),
+    agility
+  };
+}
+
+function findBestInitialCoefficient(solution, hp1, st1, df1, de1) {
+  const healthCoefficient = Math.round(Number(solution.a));
+  const attackCoefficient = Math.round(Number(solution.b));
+  const defenseCoefficient = Math.round(Number(solution.c));
+  const agilityCoefficient = Math.round(Number(solution.d));
+
+  if ([healthCoefficient, attackCoefficient, defenseCoefficient, agilityCoefficient].some(v => !Number.isFinite(v) || v < 0)) {
+    return null;
+  }
+
+  const targets = {
+    health: new Decimal(hp1),
+    attack: new Decimal(st1),
+    defense: new Decimal(df1),
+    agility: new Decimal(de1)
+  };
+
+  let best = null;
+  for (let initialCoefficient = 1; initialCoefficient <= 100; initialCoefficient++) {
+    const predicted = buildInitialStatsFromCoefficients(
+      healthCoefficient,
+      attackCoefficient,
+      defenseCoefficient,
+      agilityCoefficient,
+      initialCoefficient
+    );
+
+    const errors = {
+      health: predicted.health.minus(targets.health).abs(),
+      attack: predicted.attack.minus(targets.attack).abs(),
+      defense: predicted.defense.minus(targets.defense).abs(),
+      agility: predicted.agility.minus(targets.agility).abs()
+    };
+
+    // 네 초기치를 모두 사용한다. 큰 수치인 체력이 결과를 독점하지 않도록
+    // 각 항목의 입력 크기로 나눈 상대 오차도 함께 비교한다.
+    const absoluteError = errors.health.plus(errors.attack).plus(errors.defense).plus(errors.agility);
+    const relativeError = errors.health.dividedBy(Decimal.max(targets.health.abs(), 1))
+      .plus(errors.attack.dividedBy(Decimal.max(targets.attack.abs(), 1)))
+      .plus(errors.defense.dividedBy(Decimal.max(targets.defense.abs(), 1)))
+      .plus(errors.agility.dividedBy(Decimal.max(targets.agility.abs(), 1)));
+    const score = relativeError.times(100).plus(absoluteError.times(0.01));
+
+    if (!best || score.lessThan(best.score)) {
+      best = { initialCoefficient, predicted, errors, absoluteError, relativeError, score };
+    }
+  }
+
+  if (!best) return null;
+  return {
+    pet: {
+      initialCoefficient: best.initialCoefficient,
+      healthCoefficient,
+      attackCoefficient,
+      defenseCoefficient,
+      agilityCoefficient
+    },
+    absoluteError: best.absoluteError,
+    relativeError: best.relativeError,
+    score: best.score
+  };
+}
+
 function addPetFromSGrade(name, hp1, hp2, st1, st2, df1, df2, de1, de2) {
   const eValues = [575, 555, 535, 515, 495, 475];
-  let bestSolution = null;
-  let minDiff = new Decimal(Number.MAX_VALUE);
+  const solutions = [];
 
   for (const e of eValues) {
     try {
       const solution = solveEquations(hp2, st2, df2, de2, e);
-      const totalDiff = new Decimal(solution.totalDiff);
-      if (totalDiff.lessThan(minDiff)) {
-        minDiff = totalDiff;
-        bestSolution = solution;
-      }
+      solutions.push(solution);
     } catch (_) {}
   }
 
-  if (!bestSolution) return { ok: false, message: '적합한 계수를 찾을 수 없습니다!' };
+  if (!solutions.length) return { ok: false, message: '적합한 계수를 찾을 수 없습니다!' };
+
+  // 기존 등록 방식은 그대로 우선 적용한다. 따라서 예전에 정상 등록되던 페트의
+  // 결과는 바뀌지 않고, 기존 방식이 실패할 때만 아래 보완 계산을 사용한다.
+  const growthBest = solutions.reduce((best, solution) => {
+    if (!best) return solution;
+    return new Decimal(solution.totalDiff).lessThan(new Decimal(best.totalDiff)) ? solution : best;
+  }, null);
 
   const hp1Decimal = new Decimal(hp1);
-  const a = new Decimal(bestSolution.a);
-  const b = new Decimal(bestSolution.b);
-  const c = new Decimal(bestSolution.c);
-  const d = new Decimal(bestSolution.d);
-
+  const a = new Decimal(growthBest.a);
+  const b = new Decimal(growthBest.b);
+  const c = new Decimal(growthBest.c);
+  const d = new Decimal(growthBest.d);
   const aPlus25 = a.plus(2.5);
   const bPlus25 = b.plus(2.5);
   const cPlus25 = c.plus(2.5);
   const dPlus25 = d.plus(2.5);
-
-  let finalHealth, finalAttack, finalDefense, finalAgility;
-  let foundInitialValues = false;
 
   for (let i = 1; i < 100; i++) {
     const iDecimal = new Decimal(i).dividedBy(100);
@@ -431,26 +507,50 @@ function addPetFromSGrade(name, hp1, hp2, st1, st2, df1, df2, de1, de2) {
     const b5 = bPlus25.times(iDecimal);
     const c5 = cPlus25.times(iDecimal);
     const d5 = dPlus25.times(iDecimal);
+    const finalHealth = a5.times(4).plus(b5).plus(c5).plus(d5);
 
-    const a6 = a5.times(4).plus(b5).plus(c5).plus(d5);
-    const b6 = a5.times(0.1).plus(b5).plus(c5.times(0.1)).plus(d5.times(0.05));
-    const c6 = a5.times(0.1).plus(b5.times(0.1)).plus(c5).plus(d5.times(0.05));
-    const d6 = d5;
-
-    if (a6.floor().equals(hp1Decimal.floor())) {
-      finalHealth = a6;
-      finalAttack = b6;
-      finalDefense = c6;
-      finalAgility = d6;
-      foundInitialValues = true;
+    if (finalHealth.floor().equals(hp1Decimal.floor())) {
+      const finalAttack = a5.times(0.1).plus(b5).plus(c5.times(0.1)).plus(d5.times(0.05));
+      const finalDefense = a5.times(0.1).plus(b5.times(0.1)).plus(c5).plus(d5.times(0.05));
+      const legacyResult = addPetFromFinalStats(
+        name,
+        finalHealth.toNumber(),
+        finalAttack.toNumber(),
+        finalDefense.toNumber(),
+        d5.toNumber()
+      );
+      if (legacyResult.ok) return legacyResult;
       break;
     }
   }
 
-  if (!foundInitialValues) return { ok: false, message: '초기치 소숫점 계산에 실패했습니다!' };
-  const result = addPetFromFinalStats(name, finalHealth.toNumber(), finalAttack.toNumber(), finalDefense.toNumber(), finalAgility.toNumber());
-  if (!result.ok) return result;
-  return result;
+  // 보완 경로: 성장률 공식은 그대로 두고, 모든 성장률 후보에 대해
+  // 공/방/순/체 초기치 네 개와 가장 잘 맞는 정수 IC를 직접 찾는다.
+  let bestFallback = null;
+  for (const solution of solutions) {
+    const initialFit = findBestInitialCoefficient(solution, hp1, st1, df1, de1);
+    if (!initialFit) continue;
+
+    // 성장률 재현 오차와 초기치 재현 오차를 함께 보아 잘못된 후보 선택을 막는다.
+    const combinedScore = initialFit.score.plus(new Decimal(solution.totalDiff).times(10));
+    if (!bestFallback || combinedScore.lessThan(bestFallback.combinedScore)) {
+      bestFallback = { solution, initialFit, combinedScore };
+    }
+  }
+
+  if (!bestFallback) return { ok: false, message: '입력값에 맞는 계수를 찾을 수 없습니다!' };
+
+  // 소수 둘째 자리 입력의 반올림 오차는 허용하되, 전혀 다른 값이 들어온 경우는 막는다.
+  // 상대 오차 합 8% 초과 또는 절대 오차 합 2.0 초과일 때만 입력 재확인을 요청한다.
+  if (bestFallback.initialFit.relativeError.greaterThan(0.08) || bestFallback.initialFit.absoluteError.greaterThan(2)) {
+    return { ok: false, message: '초기치와 성장률의 차이가 너무 큽니다. 입력값을 다시 확인해 주세요!' };
+  }
+
+  return {
+    ok: true,
+    tolerance: 'fallback',
+    pet: bestFallback.initialFit.pet
+  };
 }
 
 async function savePetToAppsScript(name, pet) {
