@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="강화 단계별 성공 확률과 세이브 구간을 반영한 강화 시뮬레이터" />
+  <title>강화 시뮬레이터</title>
+  <link rel="stylesheet" href="enhancement.css" />
+</head>
+<body>
+  <nav class="top-tabs" aria-label="계산기 메뉴">
+    <div class="top-tabs-inner">
+      <a class="top-tab" href="index.html">페트 계산기</a>
+      <a class="top-tab active" href="enhancement.html">강화 시뮬레이터</a>
+    </div>
+  </nav>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">STONEAGE ENHANCEMENT LAB</p>
+        <h1>강화 시뮬레이터</h1>
+        <p class="hero-copy">무기·갑옷·투구와 토템의 강화 확률, 세이브·하락·파괴 규칙과 누적 옵션을 반영합니다.</p>
+      </div>
+      <div class="stone-badge" aria-label="강화석 한 개가 시도 한 회에 사용됨">
+        <span>◆</span>
+        <strong id="resourceBadgeText">1회 = 강화석 1개</strong>
+      </div>
+    </header>
+
+    <section class="grid top-grid">
+      <article class="panel controls-panel">
+        <div class="panel-title-row">
+          <div>
+            <p class="section-kicker">설정</p>
+            <h2>강화 조건</h2>
+          </div>
+          <button id="resetBtn" class="ghost-btn" type="button">초기화</button>
+        </div>
+
+        <div class="form-grid">
+          <label>
+            <span>아이템 종류</span>
+            <select id="itemType">
+              <option value="weapon">무기</option>
+              <option value="armor">갑옷</option>
+              <option value="helmet">투구</option>
+              <option value="totem">토템</option>
+            </select>
+          </label>
+          <label id="spiritTypeField" class="is-hidden">
+            <span>영석 종류</span>
+            <select id="spiritType">
+              <option value="normal">일반 영석</option>
+              <option value="advanced">고급 영석 (+20%p)</option>
+            </select>
+          </label>
+          <label>
+            <span>시작 강화</span>
+            <select id="startLevel"></select>
+          </label>
+          <label>
+            <span>목표 강화</span>
+            <select id="targetLevel"></select>
+          </label>
+          <label>
+            <span id="resourcePriceLabel">강화석 개당 가격</span>
+            <div class="input-suffix">
+              <input id="stonePrice" type="number" min="0" step="1" value="0" inputmode="numeric" />
+              <span>스톤</span>
+            </div>
+          </label>
+        </div>
+
+        <div class="current-card">
+          <div>
+            <span class="muted">현재 강화</span>
+            <strong id="currentLevelText">+0</strong>
+          </div>
+          <div class="progress-wrap" aria-label="현재 강화 진행도">
+            <div id="levelProgress" class="progress-bar"></div>
+          </div>
+          <div id="currentOptions" class="option-chips"></div>
+        </div>
+
+        <div class="action-grid">
+          <button id="enhanceOnceBtn" class="primary-btn" type="button">강화 1회</button>
+          <button id="autoEnhanceBtn" class="secondary-btn" type="button">목표까지 자동 강화</button>
+        </div>
+
+        <div id="lastResult" class="result-banner neutral" role="status" aria-live="polite">
+          강화 버튼을 눌러 시작하세요.
+        </div>
+      </article>
+
+      <article class="panel summary-panel">
+        <p class="section-kicker">현재 세션</p>
+        <h2>사용 현황</h2>
+        <div class="stat-grid">
+          <div class="stat-card"><span id="usedResourceLabel">사용 강화석</span><strong id="usedStones">0</strong></div>
+          <div class="stat-card"><span>성공</span><strong id="successCount">0</strong></div>
+          <div class="stat-card"><span>실패</span><strong id="failureCount">0</strong></div>
+          <div class="stat-card"><span>파괴</span><strong id="destroyedCount">0</strong></div>
+          <div class="stat-card"><span>총비용</span><strong id="totalCost">0</strong></div>
+        </div>
+        <div class="next-attempt">
+          <div>
+            <span>다음 시도</span>
+            <strong id="nextAttemptLabel">0 → 1</strong>
+          </div>
+          <div>
+            <span>성공 확률</span>
+            <strong id="nextProbability">50%</strong>
+          </div>
+          <div>
+            <span>실패 결과</span>
+            <strong id="failureOutcome">유지</strong>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid middle-grid">
+      <article class="panel simulation-panel">
+        <div class="panel-title-row">
+          <div>
+            <p class="section-kicker">대량 실험</p>
+            <h2>목표 강화 통계</h2>
+          </div>
+          <div class="simulation-controls">
+            <select id="simulationRuns" aria-label="시뮬레이션 횟수">
+              <option value="1000">1,000회</option>
+              <option value="10000" selected>10,000회</option>
+              <option value="50000">50,000회</option>
+            </select>
+            <button id="runSimulationBtn" class="dark-btn" type="button">통계 실행</button>
+          </div>
+        </div>
+
+        <div class="stat-grid simulation-stats">
+          <div class="stat-card emphasis"><span id="avgResourceLabel">평균 강화석</span><strong id="avgAttempts">-</strong></div>
+          <div class="stat-card"><span>중앙값</span><strong id="medianAttempts">-</strong></div>
+          <div class="stat-card"><span>90% 준비량</span><strong id="p90Attempts">-</strong></div>
+          <div class="stat-card"><span>95% 준비량</span><strong id="p95Attempts">-</strong></div>
+          <div class="stat-card"><span>최소</span><strong id="minAttempts">-</strong></div>
+          <div class="stat-card"><span>최대</span><strong id="maxAttempts">-</strong></div>
+          <div class="stat-card"><span>평균 파괴</span><strong id="avgDestroyed">-</strong></div>
+        </div>
+        <p id="simulationNote" class="simulation-note">설정을 선택하고 통계 실행을 눌러주세요.</p>
+      </article>
+
+      <article class="panel history-panel">
+        <div class="panel-title-row">
+          <div>
+            <p class="section-kicker">기록</p>
+            <h2>최근 강화 내역</h2>
+          </div>
+          <button id="clearHistoryBtn" class="ghost-btn" type="button">기록 지우기</button>
+        </div>
+        <ol id="historyList" class="history-list">
+          <li class="empty-history">아직 강화 기록이 없습니다.</li>
+        </ol>
+      </article>
+    </section>
+
+    <section class="panel table-panel">
+      <div class="panel-title-row">
+        <div>
+          <p class="section-kicker">단계 정보</p>
+          <h2>확률과 누적 옵션</h2>
+        </div>
+        <p id="tableLegend" class="legend"><span class="save-dot"></span> 세이브 구간</p>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>강화</th>
+              <th>성공 확률</th>
+              <th>실패 시</th>
+              <th>누적 옵션</th>
+            </tr>
+          </thead>
+          <tbody id="levelTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="enhancement.js"></script>
+</body>
+</html>
