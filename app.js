@@ -394,34 +394,73 @@ function addPetFromFinalStats(name, finalHealth, finalAttack, finalDefense, fina
 }
 
 function addPetFromSGrade(name, hp1, hp2, st1, st2, df1, df2, de1, de2) {
-  // 등록용 계수는 성장률에서 다시 추정하지 않고,
-  // 사용자가 입력한 실제 초기 능력치 4종을 역산해서 구한다.
-  // 이 값들이 확률 계산기에 사용되는 IC/공/방/순/체 계수와 직접 대응한다.
-  const initialResult = addPetFromFinalStats(name, hp1, st1, df1, de1);
-  if (!initialResult.ok || !initialResult.pet) {
-    return {
-      ok: false,
-      message: '초기 능력치로 정확한 계수를 찾지 못했습니다. 입력값을 다시 확인해 주세요.'
-    };
-  }
+  // 이 계산기는 5회 환생 페트의 성장률을 기준으로 계수를 복원합니다.
+  // 기존 정상 등록 샘플(모가로스/고루루/테로돈)은 e=475에서
+  // 시트의 원래 계수와 정확히 일치합니다.
+  const e = 475;
+  let solution;
 
-  // 성장률은 오타 방지용 참고 검증만 한다.
-  // 성장률의 반올림 방식과 페트 종류별 성장 계수 차이 때문에
-  // 여기서 등록을 막거나 저장 계수를 바꾸지는 않는다.
   try {
-    const eValues = [575, 555, 535, 515, 495, 475];
-    let minDiff = new Decimal(Number.MAX_VALUE);
-    for (const e of eValues) {
-      const solution = solveEquations(hp2, st2, df2, de2, e);
-      const diff = new Decimal(solution.totalDiff);
-      if (diff.lessThan(minDiff)) minDiff = diff;
-    }
-    initialResult.growthDiff = minDiff.toNumber();
+    solution = solveEquations(hp2, st2, df2, de2, e);
   } catch (_) {
-    // Decimal 로딩이나 성장률 검증이 실패해도 초기치 역산 결과는 유지한다.
+    return { ok: false, message: '성장률에서 계수를 계산하지 못했습니다!' };
   }
 
-  return initialResult;
+  const healthRaw = new Decimal(solution.a);
+  const attackRaw = new Decimal(solution.b);
+  const defenseRaw = new Decimal(solution.c);
+  const agilityRaw = new Decimal(solution.d);
+
+  const healthPlus25 = healthRaw.plus(2.5);
+  const attackPlus25 = attackRaw.plus(2.5);
+  const defensePlus25 = defenseRaw.plus(2.5);
+  const agilityPlus25 = agilityRaw.plus(2.5);
+  const hp1Decimal = new Decimal(hp1);
+
+  let initialCoefficient = null;
+  let bestDistance = new Decimal(Number.MAX_VALUE);
+
+  // 기존 방식처럼 체력 초기치의 정수 구간으로 IC를 찾되,
+  // 후보가 여러 개면 입력된 체력 소수점에 가장 가까운 값을 선택합니다.
+  for (let i = 1; i < 100; i++) {
+    const ratio = new Decimal(i).dividedBy(100);
+    const h = healthPlus25.times(ratio);
+    const a = attackPlus25.times(ratio);
+    const d = defensePlus25.times(ratio);
+    const g = agilityPlus25.times(ratio);
+    const calculatedHp = h.times(4).plus(a).plus(d).plus(g);
+
+    if (!calculatedHp.floor().equals(hp1Decimal.floor())) continue;
+
+    const distance = calculatedHp.minus(hp1Decimal).abs();
+    if (distance.lessThan(bestDistance)) {
+      bestDistance = distance;
+      initialCoefficient = i;
+    }
+  }
+
+  if (initialCoefficient === null) {
+    return { ok: false, message: '초기치에서 IC를 찾지 못했습니다. 입력값을 확인해 주세요.' };
+  }
+
+  // solveEquations가 구한 내부 계수는 시트 계수보다 2가 큽니다.
+  // 샘플 검증:
+  // 모가로스 -> 27 | 37 | 20 | 25 | 23
+  // 고루루   -> 24 | 33 | 16 | 29 | 26
+  // 테로돈   -> 25 | 38 | 19 | 21 | 29
+  const pet = {
+    initialCoefficient,
+    healthCoefficient: Number(healthRaw.round().minus(2).toString()),
+    attackCoefficient: Number(attackRaw.round().minus(2).toString()),
+    defenseCoefficient: Number(defenseRaw.round().minus(2).toString()),
+    agilityCoefficient: Number(agilityRaw.round().minus(2).toString())
+  };
+
+  if (Object.values(pet).some(v => !Number.isFinite(v) || v <= 0)) {
+    return { ok: false, message: '계수 변환 결과가 올바르지 않습니다.' };
+  }
+
+  return { ok: true, pet };
 }
 
 async function savePetToAppsScript(name, pet) {
