@@ -8,7 +8,7 @@ const defaultPetData = {
 
 let petData = { ...defaultPetData };
 
-function statusText(text){ document.getElementById('load-status').textContent = text; }
+function statusText(text){ const el = document.getElementById('load-status'); if (el) el.textContent = text; }
 function addStatus(text){ document.getElementById('add-status').textContent = text; }
 
 function getRecentSearches() {
@@ -62,6 +62,7 @@ function getChosung(str) {
 
 function renderPetList() {
   const list = document.getElementById('pet-list');
+  if (!list) return;
   list.innerHTML = '';
   const names = Object.keys(petData).sort((a, b) => a.localeCompare(b, 'ko-KR'));
   if (!names.length) {
