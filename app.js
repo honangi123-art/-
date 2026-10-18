@@ -250,218 +250,99 @@ async function fireGetRequest(url) {
   });
 }
 
-function solveEquations(hp2, st2, df2, de2, e) {
-  if (typeof Decimal === 'undefined') throw new Error('decimal.js 로드 실패');
-
-  Decimal.set({ precision: 50, rounding: Decimal.ROUND_HALF_UP });
-
-  const eDecimal = new Decimal(e);
-  const hp2Decimal = new Decimal(hp2);
-  const st2Decimal = new Decimal(st2);
-  const df2Decimal = new Decimal(df2);
-  const de2Decimal = new Decimal(de2);
-  const factor = eDecimal.dividedBy(10000);
-
-  const d = de2Decimal.times(10000).dividedBy(eDecimal).minus(2.5);
-  const A = [
-    [factor.times(4), factor, factor],
-    [factor.times(0.1), factor, factor.times(0.1)],
-    [factor.times(0.1), factor.times(0.1), factor]
-  ];
-
-  const dPlus25 = d.plus(2.5);
-  const dTerm = dPlus25.times(factor);
-  const B = [
-    hp2Decimal.minus(dTerm),
-    st2Decimal.minus(dTerm.times(0.05)),
-    df2Decimal.minus(dTerm.times(0.05))
-  ];
-
-  const augMatrix = [
-    [A[0][0], A[0][1], A[0][2], B[0]],
-    [A[1][0], A[1][1], A[1][2], B[1]],
-    [A[2][0], A[2][1], A[2][2], B[2]]
-  ];
-
-  for (let i = 0; i < 3; i++) {
-    let maxRowIndex = i;
-    let maxVal = augMatrix[i][i].abs();
-    for (let j = i + 1; j < 3; j++) {
-      if (augMatrix[j][i].abs().greaterThan(maxVal)) {
-        maxRowIndex = j;
-        maxVal = augMatrix[j][i].abs();
-      }
-    }
-    if (maxRowIndex !== i) [augMatrix[i], augMatrix[maxRowIndex]] = [augMatrix[maxRowIndex], augMatrix[i]];
-
-    const pivot = augMatrix[i][i];
-    for (let j = i; j < 4; j++) augMatrix[i][j] = augMatrix[i][j].dividedBy(pivot);
-
-    for (let k = 0; k < 3; k++) {
-      if (k !== i) {
-        const factor2 = augMatrix[k][i];
-        for (let j = i; j < 4; j++) {
-          augMatrix[k][j] = augMatrix[k][j].minus(factor2.times(augMatrix[i][j]));
-        }
-      }
-    }
-  }
-
-  const a = augMatrix[0][3].minus(2.5).round();
-  const b = augMatrix[1][3].minus(2.5).round();
-  const c = augMatrix[2][3].minus(2.5).round();
-
-  const aPlus25Full = a.plus(2.5);
-  const bPlus25Full = b.plus(2.5);
-  const cPlus25Full = c.plus(2.5);
-  const dPlus25Full = d.plus(2.5);
-
-  const test1 = aPlus25Full.times(factor).times(4).plus(bPlus25Full.times(factor)).plus(cPlus25Full.times(factor)).plus(dPlus25Full.times(factor));
-  const test2 = aPlus25Full.times(factor).times(0.1).plus(bPlus25Full.times(factor)).plus(cPlus25Full.times(factor).times(0.1)).plus(dPlus25Full.times(factor).times(0.05));
-  const test3 = aPlus25Full.times(factor).times(0.1).plus(bPlus25Full.times(factor).times(0.1)).plus(cPlus25Full.times(factor)).plus(dPlus25Full.times(factor).times(0.05));
-  const test4 = dPlus25Full.times(factor);
-
-  const diff1 = test1.toDecimalPlaces(2).minus(hp2Decimal).abs();
-  const diff2 = test2.toDecimalPlaces(2).minus(st2Decimal).abs();
-  const diff3 = test3.toDecimalPlaces(2).minus(df2Decimal).abs();
-  const diff4 = test4.toDecimalPlaces(2).minus(de2Decimal).abs();
-  const totalDiff = diff1.plus(diff2).plus(diff3).plus(diff4);
-
-  return {
-    a: a.toString(),
-    b: b.toString(),
-    c: c.toString(),
-    d: d.toString(),
-    totalDiff: totalDiff.toString(),
-    e
-  };
+// The game truncates initial stats to 2 places and growth to 3 places.
+// Work with their displayed intervals rather than comparing HP integers.
+function petDisplayMatches(actual, displayed, places) {
+  const scale = 10 ** places;
+  return Math.floor(actual * scale + 1e-7) === Math.round(displayed * scale);
 }
 
-function addPetFromFinalStats(name, finalHealth, finalAttack, finalDefense, finalAgility) {
-  function tryCalculateCoefficients(tolerance) {
-    for (let initialStatCoefficient = 10; initialStatCoefficient <= 100; initialStatCoefficient++) {
-      const agilityCoefficient = (finalAgility * 100 / initialStatCoefficient) - 4.5;
-      if (agilityCoefficient <= 0 || Math.abs(agilityCoefficient - Math.round(agilityCoefficient)) > tolerance) continue;
+function petStatsFromBases([h, a, d, g]) {
+  return [4 * h + a + d + g, 0.1 * h + a + 0.1 * d + 0.05 * g,
+    0.1 * h + 0.1 * a + d + 0.05 * g, g];
+}
 
-      const roundedAgilityCoeff = Math.round(agilityCoefficient);
-      const eq1_rhs = finalHealth - finalAgility;
-      const eq2_rhs = finalAttack - (0.05 * finalAgility);
-      const eq3_rhs = finalDefense - (0.05 * finalAgility);
-
-      const eq4_rhs = eq2_rhs - eq1_rhs;
-      const eq5_rhs = eq3_rhs - 0.1 * eq1_rhs;
-
-      const eq5 = { A: -3, C: 9, RHS: eq5_rhs * 10 };
-      const eq4 = { A: -3.9, C: -0.9, RHS: eq4_rhs };
-      const multiplier = 3 / 3.9;
-      const eq4_scaled = { A: eq4.A * multiplier, C: eq4.C * multiplier, RHS: eq4.RHS * multiplier };
-      const C_coeff = 9.6923;
-      const C_rhs = eq5.RHS - eq4_scaled.RHS;
-
-      const C = C_rhs / C_coeff;
-      const A = (eq5_rhs - 0.9 * C) / -0.3;
-      const B = eq1_rhs - 4 * A - C;
-
-      if (A < 0 || B < 0 || C < 0) continue;
-
-      const healthCoefficient = (A * 100 / initialStatCoefficient) - 4.5;
-      const attackCoefficient = (B * 100 / initialStatCoefficient) - 4.5;
-      const defenseCoefficient = (C * 100 / initialStatCoefficient) - 4.5;
-
-      if (
-        Math.abs(healthCoefficient - Math.round(healthCoefficient)) > tolerance ||
-        Math.abs(attackCoefficient - Math.round(attackCoefficient)) > tolerance ||
-        Math.abs(defenseCoefficient - Math.round(defenseCoefficient)) > tolerance
-      ) continue;
-
-      return {
-        ok: true,
-        tolerance,
-        pet: {
-          initialCoefficient: initialStatCoefficient,
-          healthCoefficient: Math.round(healthCoefficient),
-          attackCoefficient: Math.round(attackCoefficient),
-          defenseCoefficient: Math.round(defenseCoefficient),
-          agilityCoefficient: roundedAgilityCoeff
-        }
-      };
-    }
-    return { ok: false };
-  }
-
-  let result = tryCalculateCoefficients(0.1);
-  if (!result.ok) result = tryCalculateCoefficients(0.2);
-  return result;
+function petBasesFromStats([hp, attack, defense, agility]) {
+  const h = (1.1 * hp - attack - defense - agility) / 4.2;
+  const sum = (attack + defense - 0.2 * h - 0.1 * agility) / 1.1;
+  const difference = (attack - defense) / 0.9;
+  return [h, (sum + difference) / 2, (sum - difference) / 2, agility];
 }
 
 function addPetFromSGrade(name, hp1, hp2, st1, st2, df1, df2, de1, de2) {
-  // 이 계산기는 5회 환생 페트의 성장률을 기준으로 계수를 복원합니다.
-  // 기존 정상 등록 샘플(모가로스/고루루/테로돈)은 e=475에서
-  // 시트의 원래 계수와 정확히 일치합니다.
-  const e = 475;
-  let solution;
-
-  try {
-    solution = solveEquations(hp2, st2, df2, de2, e);
-  } catch (_) {
-    return { ok: false, message: '성장률에서 계수를 계산하지 못했습니다!' };
+  const initial = [hp1, st1, df1, de1];
+  const growth = [hp2, st2, df2, de2];
+  if ([...initial, ...growth].some(value => !Number.isFinite(value) || value <= 0)) {
+    return { ok: false, message: '초기치와 성장률은 0보다 큰 숫자로 입력해 주세요.' };
+  }
+  if (initial.some(value => !Number.isSafeInteger(Math.round(value * 100)) || Math.abs(value * 100 - Math.round(value * 100)) > 1e-7)
+      || growth.some(value => !Number.isSafeInteger(Math.round(value * 1000)) || Math.abs(value * 1000 - Math.round(value * 1000)) > 1e-7)) {
+    return { ok: false, message: '게임에 표시된 초기치(소수점 2자리), 성장률(소수점 3자리)을 입력해 주세요.' };
   }
 
-  const healthRaw = new Decimal(solution.a);
-  const attackRaw = new Decimal(solution.b);
-  const defenseRaw = new Decimal(solution.c);
-  const agilityRaw = new Decimal(solution.d);
+  // A linear inverse reaches its bounds at corners of the display intervals.
+  const bounds = Array.from({ length: 4 }, () => [Infinity, -Infinity]);
+  for (let mask = 0; mask < 16; mask++) {
+    const corner = initial.map((value, index) => value + ((mask >> index) & 1) * 0.01);
+    petBasesFromStats(corner).forEach((value, index) => {
+      bounds[index][0] = Math.min(bounds[index][0], value);
+      bounds[index][1] = Math.max(bounds[index][1], value);
+    });
+  }
 
-  const healthPlus25 = healthRaw.plus(2.5);
-  const attackPlus25 = attackRaw.plus(2.5);
-  const defensePlus25 = defenseRaw.plus(2.5);
-  const agilityPlus25 = agilityRaw.plus(2.5);
-  const hp1Decimal = new Decimal(hp1);
+  const candidates = [];
+  for (let ic = 1; ic <= 100; ic++) {
+    // S-grade bases are sheet coefficient + 2 + 2.5, hence half integers.
+    const options = bounds.map(([low, high]) => {
+      const values = [];
+      const first = Math.max(1, Math.ceil(low * 100 / ic - 4.5 - 1e-7));
+      const last = Math.floor(high * 100 / ic - 4.5 + 1e-7);
+      for (let coefficient = first; coefficient <= last; coefficient++) values.push(coefficient + 4.5);
+      return values;
+    });
+    for (const h of options[0]) for (const a of options[1]) {
+      for (const d of options[2]) for (const g of options[3]) {
+        const baseStats = petStatsFromBases([h, a, d, g]);
+        if (!baseStats.every((value, index) => petDisplayMatches(value * ic / 100, initial[index], 2))) continue;
 
-  let initialCoefficient = null;
-  let bestDistance = new Decimal(Number.MAX_VALUE);
-
-  // 기존 방식처럼 체력 초기치의 정수 구간으로 IC를 찾되,
-  // 후보가 여러 개면 입력된 체력 소수점에 가장 가까운 값을 선택합니다.
-  for (let i = 1; i < 100; i++) {
-    const ratio = new Decimal(i).dividedBy(100);
-    const h = healthPlus25.times(ratio);
-    const a = attackPlus25.times(ratio);
-    const d = defensePlus25.times(ratio);
-    const g = agilityPlus25.times(ratio);
-    const calculatedHp = h.times(4).plus(a).plus(d).plus(g);
-
-    if (!calculatedHp.floor().equals(hp1Decimal.floor())) continue;
-
-    const distance = calculatedHp.minus(hp1Decimal).abs();
-    if (distance.lessThan(bestDistance)) {
-      bestDistance = distance;
-      initialCoefficient = i;
+        // Infer the growth multiplier instead of forcing e=475 for every pet.
+        let lower = 0;
+        let upper = Infinity;
+        baseStats.forEach((value, index) => {
+          lower = Math.max(lower, growth[index] / value);
+          upper = Math.min(upper, (growth[index] + 0.001) / value);
+        });
+        if (lower >= upper) continue;
+        // Retain the existing e/10000 convention, allowing any positive integer e.
+        const firstE = Math.max(1, Math.ceil(lower * 10000 - 1e-7));
+        const lastE = Math.ceil(upper * 10000 - 1e-7) - 1;
+        if (!Number.isSafeInteger(firstE) || !Number.isSafeInteger(lastE)) continue;
+        const growthMultipliers = [];
+        for (let e = firstE; e <= lastE; e++) {
+          if (baseStats.every((value, index) => petDisplayMatches(value * e / 10000, growth[index], 3))) {
+            growthMultipliers.push(e);
+          }
+        }
+        if (!growthMultipliers.length) continue;
+        candidates.push({
+          pet: { initialCoefficient: ic, healthCoefficient: h - 4.5,
+            attackCoefficient: a - 4.5, defenseCoefficient: d - 4.5, agilityCoefficient: g - 4.5 },
+          growthMultipliers
+        });
+      }
     }
   }
 
-  if (initialCoefficient === null) {
-    return { ok: false, message: '초기치에서 IC를 찾지 못했습니다. 입력값을 확인해 주세요.' };
+  // Keep the original 475 convention only when all eight input stats agree.
+  const legacy = candidates.filter(candidate => candidate.growthMultipliers.includes(475));
+  const matches = legacy.length === 1 ? legacy : candidates;
+  if (!matches.length) {
+    return { ok: false, message: '초기치와 성장률 8개를 모두 만족하는 계수가 없습니다. S급 이상치인지, 입력값이 같은 페트의 수치인지 확인해 주세요.' };
   }
-
-  // solveEquations가 구한 내부 계수는 시트 계수보다 2가 큽니다.
-  // 샘플 검증:
-  // 모가로스 -> 27 | 37 | 20 | 25 | 23
-  // 고루루   -> 24 | 33 | 16 | 29 | 26
-  // 테로돈   -> 25 | 38 | 19 | 21 | 29
-  const pet = {
-    initialCoefficient,
-    healthCoefficient: Number(healthRaw.round().minus(2).toString()),
-    attackCoefficient: Number(attackRaw.round().minus(2).toString()),
-    defenseCoefficient: Number(defenseRaw.round().minus(2).toString()),
-    agilityCoefficient: Number(agilityRaw.round().minus(2).toString())
-  };
-
-  if (Object.values(pet).some(v => !Number.isFinite(v) || v <= 0)) {
-    return { ok: false, message: '계수 변환 결과가 올바르지 않습니다.' };
+  if (matches.length !== 1) {
+    return { ok: false, message: `계수 후보가 ${matches.length}개라 확정할 수 없습니다. 잘못된 등록을 막기 위해 저장하지 않았습니다. S급 이상치를 확인해 주세요.` };
   }
-
-  return { ok: true, pet };
+  return { ok: true, pet: matches[0].pet, growthMultipliers: matches[0].growthMultipliers };
 }
 
 async function savePetToAppsScript(name, pet) {
@@ -488,8 +369,8 @@ async function handleAddPet() {
   const gagi = parseFloat(document.getElementById('grow-agi').value);
   const ghp = parseFloat(document.getElementById('grow-hp').value);
 
-  if (!name || [atk, def, agi, hp, gatk, gdef, gagi, ghp].some(v => Number.isNaN(v))) {
-    addStatus('모든 입력칸을 채워주세요.');
+  if (!name || [atk, def, agi, hp, gatk, gdef, gagi, ghp].some(v => !Number.isFinite(v) || v <= 0)) {
+    addStatus('이름과 모든 수치를 입력해 주세요. 수치는 0보다 커야 합니다.');
     return;
   }
 
